@@ -7,6 +7,8 @@ from security import get_current_admin
 from fastapi.responses import FileResponse
 from datetime import datetime,  date
 import shutil
+from pydantic import EmailStr
+from email_service import send_verification_email
 
 
 admin_router = APIRouter()
@@ -159,3 +161,29 @@ def get_feedback(start_date: date, end_date: date):
                         (start_date, end_date))
     feedbacks = main.cursor.fetchall()
     return feedbacks
+
+
+@admin_router.put("/api/admin/password/change/code/{email}")
+def send_password_change_code_to_email(email: EmailStr):
+    try:
+        main.cursor.execute("SELECT * FROM admins WHERE email=%s",
+                            (email,))
+        user = main.cursor.fetchone()
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="server error"
+        )
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="not such user!"
+
+        )
+
+    verification_code = send_verification_email(email)
+    main.cursor.execute("INSERT INTO changepasswordcodes (code,email) VALUES(%s,%s)",
+                        (verification_code, email))
+
+    main.conn.commit()

@@ -28,5 +28,3 @@ app.mount("/admin_images", StaticFiles(directory="admin_images"), name="admin_im
 app.include_router(auth_router)
 app.include_router(admin_router)
 
-#todo image must be url+
-#todo add real products+
