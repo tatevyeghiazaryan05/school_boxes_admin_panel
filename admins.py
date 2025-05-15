@@ -2,10 +2,10 @@ import os
 
 import main
 from fastapi import APIRouter, Depends, HTTPException, status, Form, File, UploadFile
-from schemas import ProductNameChangeSchema, ProductKindChangeSchema, ProductPriceChangeSchema, ProductCategoryChangeSchema
-from security import get_current_admin
+from schemas import ProductNameChangeSchema, ProductKindChangeSchema, ProductPriceChangeSchema, ProductCategoryChangeSchema, AdminPasswordRecover
+from security import get_current_admin, pwd_context
 from fastapi.responses import FileResponse
-from datetime import datetime,  date
+from datetime import datetime,  date, timedelta
 import shutil
 from pydantic import EmailStr
 from email_service import send_verification_email
@@ -187,3 +187,49 @@ def send_password_change_code_to_email(email: EmailStr):
                         (verification_code, email))
 
     main.conn.commit()
+
+
+@admin_router.post("/api/admin/password/recovery/by/email")
+def password_recovery(recover_data: AdminPasswordRecover):
+    code = recover_data.code
+
+    new_password = pwd_context.hash(recover_data.new_password)
+
+    try:
+        main.cursor.execute("SELECT * FROM changepasswordcodes WHERE code=%s",
+                        (code,))
+        data = main.cursor.fetchone()
+
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="server error"
+        )
+
+    if not data:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Code is incorrect!"
+
+        )
+
+    data = dict(data)
+    created_at = data.get("created_at")
+    expiration_time = created_at + timedelta(minutes=15)
+    if datetime.now() > expiration_time:
+        main.cursor.execute("DELETE FROM changepasswordcodes WHERE code=%s", (code,))
+        main.conn.commit()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Code has expired after 15 minutes."
+        )
+
+    main.cursor.execute("UPDATE admins SET password =%s WHERE email=%s",
+                        (new_password, data["email"]))
+
+    main.conn.commit()
+
+    main.cursor.execute("DELETE FROM changepasswordcodes WHERE code = %s",
+                        (code,))
+    main.conn.commit()
+    return "Recovered successfully!!"

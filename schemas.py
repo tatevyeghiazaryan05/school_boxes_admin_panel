@@ -20,3 +20,8 @@ class ProductPriceChangeSchema(BaseModel):
 
 class ProductCategoryChangeSchema(BaseModel):
     category: str
+
+
+class AdminPasswordRecover(BaseModel):
+    code: str
+    new_password: str
