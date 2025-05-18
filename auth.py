@@ -6,7 +6,7 @@ from schemas import AdminLoginSchema
 import os
 from datetime import datetime
 from fastapi.responses import FileResponse
-auth_router = APIRouter()
+auth_router = APIRouter(prefix="/adminpanel")
 
 
 @auth_router.post("/api/admin/auth/sign-up")

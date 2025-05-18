@@ -11,7 +11,7 @@ from pydantic import EmailStr
 from email_service import send_verification_email
 
 
-admin_router = APIRouter()
+admin_router = APIRouter(prefix="/adminpanel")
 
 
 @admin_router.post("/api/product/add")
