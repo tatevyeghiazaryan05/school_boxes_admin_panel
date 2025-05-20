@@ -258,3 +258,30 @@ def get_order_by_date(min_price: float, max_price: float):
     orders = main.cursor.fetchall()
     return orders
 
+
+@admin_router.get("/api/admin/notifications")
+def get_admin_notifications():
+    main.cursor.execute("SELECT id, message, created_at FROM notifications WHERE is_read = %s",
+                        (False, ))
+    return main.cursor.fetchall()
+
+
+@admin_router.post("/api/admin/notifications/mark-read/{notification_id}")
+def mark_notification_as_read(notification_id: int):
+    main.cursor.execute("UPDATE notifications SET is_read = TRUE WHERE id = %s",
+                        (notification_id,))
+    main.conn.commit()
+    return {"message": "Notification marked as read"}
+
+
+@admin_router.delete("/api/admin/notifications/delete/by/id/{notification_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_notification(notification_id: int, token=Depends(get_current_admin)):
+    try:
+        main.cursor.execute("DELETE FROM notifications WHERE id=%s",
+                        (notification_id,))
+
+        main.conn.commit()
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
