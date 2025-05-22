@@ -178,7 +178,7 @@ def get_images(product_id: int):
 
 
 @admin_router.get("/admins/api/get/feedback/{start_date}/{end_date}", status_code=200)
-def get_feedback(start_date: date, end_date: date):
+def get_feedback(start_date: date, end_date: date, token=Depends(get_current_admin)):
     try:
         main.cursor.execute("SELECT * FROM feedback WHERE created_at >= %s AND created_at <= %s",
                         (start_date, end_date))
@@ -266,7 +266,7 @@ def password_recovery(recover_data: AdminPasswordRecover):
 
 
 @admin_router.get("/api/admin/get/orders/by/id/{order_id}")
-def get_order_by_id(order_id: int):
+def get_order_by_id(order_id: int,token=Depends(get_current_admin)):
     try:
         main.cursor.execute("SELECT * FROM orders WHERE id=%s",
                             (order_id,))
@@ -277,7 +277,7 @@ def get_order_by_id(order_id: int):
 
 
 @admin_router.get("/api/admin/get/orders/by/date/{start_date}/{end_date}")
-def get_order_by_date(start_date: date, end_date: date):
+def get_order_by_date(start_date: date, end_date: date,token=Depends(get_current_admin)):
     try:
         main.cursor.execute("SELECT * FROM orders WHERE created_at >= %s AND created_at <= %s",
                         (start_date, end_date))
@@ -288,7 +288,7 @@ def get_order_by_date(start_date: date, end_date: date):
 
 
 @admin_router.get("/api/admin/get/orders/by/price/{min_price}/{max_price}")
-def get_order_by_date(min_price: float, max_price: float):
+def get_order_by_date(min_price: float, max_price: float,token=Depends(get_current_admin)):
     try:
         main.cursor.execute("SELECT * FROM orders WHERE total_price >= %s AND total_price <= %s",
                         (min_price, max_price))
@@ -298,8 +298,8 @@ def get_order_by_date(min_price: float, max_price: float):
         raise HTTPException(status_code=500, detail="Server error while fetching orders by date")
 
 
-@admin_router.get("/api/admin/notifications")
-def get_admin_notifications():
+@admin_router.get("/api/admin/notifications,")
+def get_admin_notifications(token=Depends(get_current_admin)):
     try:
         main.cursor.execute("SELECT id, message, created_at FROM notifications WHERE is_read = %s",
                         (False, ))
