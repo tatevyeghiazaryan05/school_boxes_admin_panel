@@ -18,36 +18,50 @@ def admin_signup(
 ):
     Upload_Dir = "admin_images"
     BASE_URL = "http://localhost:8001"
-    if not os.path.exists(Upload_Dir):
-        os.makedirs(Upload_Dir)
+    try:
+        if not os.path.exists(Upload_Dir):
+            os.makedirs(Upload_Dir)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error creating upload directory: {str(e)}")
 
-    main.cursor.execute("SELECT * FROM admins WHERE email = %s", (email,))
-    if main.cursor.fetchone():
-        raise HTTPException(status_code=400, detail="Email already registered.")
+    try:
+        main.cursor.execute("SELECT * FROM admins WHERE email = %s", (email,))
+        if main.cursor.fetchone():
+            raise HTTPException(status_code=400, detail="Email already registered.")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database error during email check: {str(e)}")
 
-    if file and file.filename != "":
-        print("hello")
-        l = file.filename.split(".")
+    try:
 
-        image_name = l[0] + " " + str(datetime.now()).replace(":", "") + "." + l[-1]
-        file_path = f"{Upload_Dir}/{image_name}"
-        image_url=f"{BASE_URL}/{file_path}"
+        if file and file.filename != "":
+            print("hello")
+            l = file.filename.split(".")
 
-        try:
-            with open(file_path, "wb") as buffer:
-                shutil.copyfileobj(file.file, buffer)
+            image_name = l[0] + " " + str(datetime.now()).replace(":", "") + "." + l[-1]
+            file_path = f"{Upload_Dir}/{image_name}"
+            image_url=f"{BASE_URL}/{file_path}"
 
-        except PermissionError:
-            raise HTTPException(status_code=500, detail="File write error")
-    else:
-        image_url = f"{BASE_URL}/{Upload_Dir}/default.png"
+            try:
+                with open(file_path, "wb") as buffer:
+                    shutil.copyfileobj(file.file, buffer)
 
-    hashed_password = pwd_context.hash(password)
+            except PermissionError:
+                raise HTTPException(status_code=500, detail="File write error")
+        else:
+            image_url = f"{BASE_URL}/{Upload_Dir}/default.png"
 
-    main.cursor.execute("INSERT INTO admins (name, email, password, image_name) VALUES (%s,%s,%s,%s)",
-                        (name, email, hashed_password, image_url))
-    main.conn.commit()
-    return {"message": "Sign Up Successfully!", "image_url": image_url}
+        hashed_password = pwd_context.hash(password)
+
+        main.cursor.execute("INSERT INTO admins (name, email, password, image_name) VALUES (%s,%s,%s,%s)",
+                            (name, email, hashed_password, image_url))
+        main.conn.commit()
+        return {"message": "Sign Up Successfully!", "image_url": image_url}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        main.conn.rollback()
+        raise HTTPException(status_code=500, detail=f"Database error during sign-up: {str(e)}")
 
 
 @auth_router.post("/api/admin/auth/login")
@@ -55,19 +69,26 @@ def admin_login(login_data: AdminLoginSchema):
     email = login_data.email
     password = login_data.password
 
-    main.cursor.execute("SELECT * FROM admins WHERE email = %s",
+    try:
+        main.cursor.execute("SELECT * FROM admins WHERE email = %s",
                         (email,))
-    admin = main.cursor.fetchone()
-    admin = dict(admin)
-    admin_password_db = admin.get("password")
+        admin = main.cursor.fetchone()
+        if not admin:
+            raise HTTPException(status_code=404, detail="Admin not found")
+        admin = dict(admin)
+        admin_password_db = admin.get("password")
 
-    if not pwd_context.verify(password, admin_password_db):
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="password is not correct!!"
-        )
-    else:
-        admin_id_db = admin.get("id")
-        admin_email_db = admin.get("email")
-        return create_access_token({"id": admin_id_db, "email": admin_email_db})
+        if not pwd_context.verify(password, admin_password_db):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="password is not correct!!"
+            )
+        else:
+            admin_id_db = admin.get("id")
+            admin_email_db = admin.get("email")
+            return create_access_token({"id": admin_id_db, "email": admin_email_db})
 
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error during login: {str(e)}")
