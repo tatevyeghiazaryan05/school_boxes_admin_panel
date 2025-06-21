@@ -1,8 +1,11 @@
-from passlib.context import CryptContext
-from jose import jwt
 import datetime
+
 from fastapi.security.oauth2 import OAuth2PasswordBearer
 from fastapi import Depends
+
+from passlib.context import CryptContext
+from jose import jwt
+
 
 oauth2_schema = OAuth2PasswordBearer(tokenUrl="/api/admin/auth/login")
 

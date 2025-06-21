@@ -1,12 +1,18 @@
-import main
-from fastapi import APIRouter, HTTPException, status, Form, UploadFile, File
-from security import pwd_context, create_access_token
-import shutil
-from schemas import AdminLoginSchema
 import os
-from datetime import datetime
-from fastapi.responses import FileResponse
-auth_router = APIRouter(prefix="/adminpanel")
+import shutil
+from datetime import datetime, timedelta
+
+from pydantic import EmailStr
+
+from fastapi import APIRouter, HTTPException, status, Form, UploadFile, File
+
+import main
+from email_service import send_verification_email
+from schemas import AdminLoginSchema, AdminPasswordRecover
+from security import pwd_context, create_access_token
+
+
+auth_router = APIRouter(prefix="/adminpanel", tags=["adminauth"])
 
 
 @auth_router.post("/api/admin/auth/sign-up")
@@ -92,3 +98,81 @@ def admin_login(login_data: AdminLoginSchema):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error during login: {str(e)}")
+
+
+@auth_router.put("/api/admin/password/change/code/{email}")
+def send_password_change_code_to_email(email: EmailStr):
+    try:
+        main.cursor.execute("SELECT * FROM admins WHERE email=%s",
+                            (email,))
+        user = main.cursor.fetchone()
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="server error"
+        )
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="not such user!"
+
+        )
+
+    verification_code = send_verification_email(email)
+    main.cursor.execute("INSERT INTO changepasswordcodes (code,email) VALUES(%s,%s)",
+                        (verification_code, email))
+
+    main.conn.commit()
+
+
+@auth_router.post("/api/admin/password/recovery/by/email")
+def password_recovery(recover_data: AdminPasswordRecover):
+    try:
+            code = recover_data.code
+
+            new_password = pwd_context.hash(recover_data.new_password)
+
+            try:
+                main.cursor.execute("SELECT * FROM changepasswordcodes WHERE code=%s",
+                                (code,))
+                data = main.cursor.fetchone()
+
+            except Exception:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="server error"
+                )
+
+            if not data:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Code is incorrect!"
+
+                )
+
+            data = dict(data)
+            created_at = data.get("created_at")
+            expiration_time = created_at + timedelta(minutes=15)
+            if datetime.now() > expiration_time:
+                main.cursor.execute("DELETE FROM changepasswordcodes WHERE code=%s", (code,))
+                main.conn.commit()
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Code has expired after 15 minutes."
+                )
+
+            main.cursor.execute("UPDATE admins SET password =%s WHERE email=%s",
+                                (new_password, data["email"]))
+
+            main.conn.commit()
+
+            main.cursor.execute("DELETE FROM changepasswordcodes WHERE code = %s",
+                            (code,))
+            main.conn.commit()
+            return "Recovered successfully!!"
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=500, detail="Server error during password recovery")
+

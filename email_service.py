@@ -1,5 +1,4 @@
 import smtplib
-import random
 from email.message import EmailMessage
 import secrets
 import string
